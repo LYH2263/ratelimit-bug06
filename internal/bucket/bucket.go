@@ -46,6 +46,17 @@ func Take(st syncstate.State, rate float64, burst int, now time.Time, n int) (sy
 	return st, true, rem
 }
 
+// Put 归还 n 个令牌到桶（Take 的逆操作），封顶 burst，供 Cancel/credit 归还半占用令牌。
+func Put(st syncstate.State, rate float64, burst int, now time.Time, n int) (syncstate.State, int) {
+	st = refill(st, rate, burst, now)
+	if n < 0 {
+		n = 0
+	}
+	st.Tokens = math.Min(float64(burst), st.Tokens+float64(n))
+	st = syncstate.Bump(st)
+	return st, int(st.Tokens)
+}
+
 func DelayFor(st syncstate.State, rate float64, burst int, now time.Time, n int) time.Duration {
 	st = refill(st, rate, burst, now)
 	if st.Tokens >= float64(n) {

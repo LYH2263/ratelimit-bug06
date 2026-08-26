@@ -86,9 +86,56 @@ func (l *Limiter) AllowCtx(ctx context.Context, key string) (bool, error) {
 	return true, nil
 }
 
+// credit 归还 n 个令牌（Take 的逆操作），供 Cancel 归还半占用令牌、
+// 及 AllowCtx 在 ctx 取消后回滚已占用令牌。与 AllowN 同样走 Load/CAS 重试，
+// 归还量封顶 burst，避免并发下归还超过容量。
 func (l *Limiter) credit(key string, n int) {
-	_ = key
-	_ = n
+	if n <= 0 {
+		return
+	}
+	l.mu.RLock()
+	if l.closed {
+		l.mu.RUnlock()
+		return
+	}
+	q := l.quotaFor(key)
+	l.mu.RUnlock()
+
+	now := l.clk.Now()
+	for attempt := 0; attempt < 8; attempt++ {
+		l.mu.RLock()
+		if l.closed {
+			l.mu.RUnlock()
+			return
+		}
+		l.mu.RUnlock()
+
+		st, ok, err := l.store.Load(key)
+		if err != nil {
+			return
+		}
+		if !ok {
+			// 桶已不存在：归还的令牌无处安放，直接新建一个满桶即可，
+			// 等价于不归还（反正容量已重置），这里保留 Save 以维持状态存在性。
+			st = bucket.NewState(q.Burst, now)
+		}
+		next, rem := bucket.Put(st, q.Rate, q.Burst, now, n)
+		_ = rem
+		if ok {
+			swapped, err := l.store.CAS(key, st, next)
+			if err != nil {
+				return
+			}
+			if !swapped {
+				continue
+			}
+		} else {
+			if err := l.store.Save(key, next); err != nil {
+				return
+			}
+		}
+		return
+	}
 }
 
 func (l *Limiter) quotaFor(key string) Quota {

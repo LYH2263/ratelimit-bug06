@@ -47,9 +47,15 @@ func (l *Limiter) Reserve(key string, n int) *Reservation {
 	return &Reservation{ok: true, tokens: n, delay: 0, limiter: l, key: key, held: true}
 }
 
+// Cancel 归还 Reserve 已占用的令牌（Take 的逆操作），解开半占用。
+// 须持 held 标志才归还，且 Cancel/Commit 均将 held 置 false 以保证幂等：
+// 多次 Cancel 只归还一次，Cancel 后 Commit 不再视为占用。
 func (r *Reservation) Cancel() {
 	if r == nil {
 		return
+	}
+	if r.held {
+		r.limiter.credit(r.key, r.tokens)
 	}
 	r.held = false
 	r.ok = false
