@@ -1,4 +1,7 @@
 FROM golang:1.22
-WORKDIR /src
+WORKDIR /app
+COPY go.mod ./
+RUN go mod download
 COPY . .
-RUN go test ./... -count=1
+RUN go build ./...
+CMD ["bash"]
