@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <title>RateLimit Dashboard</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; background: #0b1220; color: #e8eef7; }
+    h1 { color: #34d399; }
+    .cards { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .card { background: #152033; padding: 1rem 1.5rem; border-radius: 8px; min-width: 120px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+    th, td { border: 1px solid #2d3a52; padding: 0.5rem; text-align: left; }
+    button { background: #059669; color: #fff; border: 0; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>令牌桶限流 Dashboard</h1>
+  <button onclick="refresh()">刷新</button>
+  <div class="cards" id="stats"></div>
+  <h2>Keys</h2>
+  <table>
+    <thead><tr><th>Key</th><th>Tokens</th><th>Rate</th><th>Burst</th><th>Version</th></tr></thead>
+    <tbody id="keys"></tbody>
+  </table>
+  <script>
+    async function refresh() {
+      const s = await fetch('/api/stats').then(r => r.json());
+      document.getElementById('stats').innerHTML =
+        [['Keys','keys'],['Closed','closed'],['Shards','shards']].map(([l,k]) =>
+          '<div class="card"><div>'+l+'</div><strong>'+s[k]+'</strong></div>').join('');
+      const rows = await fetch('/api/keys').then(r => r.json());
+      document.getElementById('keys').innerHTML = rows.map(x =>
+        '<tr><td>'+x.key+'</td><td>'+x.tokens+'</td><td>'+x.rate+'</td><td>'+x.burst+'</td><td>'+x.version+'</td></tr>').join('');
+    }
+    refresh();
+  </script>
+</body>
+</html>
